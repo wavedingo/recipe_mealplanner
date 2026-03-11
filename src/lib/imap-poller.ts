@@ -75,9 +75,14 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
             processed++;
             console.log(`[imap-poller] Saved recipe: "${parsed.title}" from ${url}`);
           } catch (err) {
-            const msg = `Failed to parse/save recipe from ${url}: ${err instanceof Error ? err.message : String(err)}`;
-            console.error(`[imap-poller] ${msg}`);
-            errors.push(msg);
+            // Silently skip duplicate URL errors (P2002 - unique constraint violation)
+            if (err instanceof Object && 'code' in err && err.code === 'P2002') {
+              console.log(`[imap-poller] Recipe from ${url} already exists, skipping.`);
+            } else {
+              const msg = `Failed to parse/save recipe from ${url}: ${err instanceof Error ? err.message : String(err)}`;
+              console.error(`[imap-poller] ${msg}`);
+              errors.push(msg);
+            }
           }
         }
 
@@ -85,9 +90,9 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
         try {
           await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
         } catch (err) {
-          console.error(
-            `[imap-poller] Failed to mark message ${message.uid} as read: ${err instanceof Error ? err.message : String(err)}`
-          );
+          const msg = `Failed to mark message ${message.uid} as read: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`[imap-poller] ${msg}`);
+          errors.push(msg);
         }
       }
     } finally {

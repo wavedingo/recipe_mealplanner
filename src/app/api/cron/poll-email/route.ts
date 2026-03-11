@@ -16,7 +16,7 @@ export async function GET() {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
       { processed: 0, errors: [message] },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }
