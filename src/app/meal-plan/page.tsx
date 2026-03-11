@@ -37,10 +37,10 @@ interface RecipeForPicker {
 
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay();
+  const day = d.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + diff);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
@@ -50,7 +50,7 @@ function formatDateISO(date: Date): string {
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
-  d.setDate(d.getDate() + days);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
@@ -333,7 +333,11 @@ export default function MealPlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dayOfWeek, recipeId: null }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        alert(err.error || 'Failed to remove recipe. Please try again.');
+        return;
+      }
       // Optimistically update the local state
       setMealPlan((prev) => {
         if (!prev) return prev;
@@ -345,7 +349,7 @@ export default function MealPlanPage() {
         };
       });
     } catch {
-      // silent — could show a toast here
+      alert('Network error. Please try again.');
     }
   };
 
@@ -358,7 +362,11 @@ export default function MealPlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dayOfWeek: pickerDay, recipeId: recipe.id }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        alert(err.error || 'Failed to assign recipe. Please try again.');
+        return;
+      }
       const updatedEntry = await res.json() as MealPlanEntry;
       setMealPlan((prev) => {
         if (!prev) return prev;
@@ -370,7 +378,7 @@ export default function MealPlanPage() {
         };
       });
     } catch {
-      // silent
+      alert('Network error. Please try again.');
     }
   };
 
@@ -514,7 +522,7 @@ export default function MealPlanPage() {
             {allEntries.map((entry) => {
               const date = weekDates[entry.dayOfWeek];
               const today = new Date();
-              today.setHours(0, 0, 0, 0);
+              today.setUTCHours(0, 0, 0, 0);
               const isToday = date.getTime() === today.getTime();
 
               return (

@@ -31,6 +31,14 @@ export async function PUT(
     return NextResponse.json({ error: 'recipeId must be a string or null' }, { status: 400 });
   }
 
+  // Validate recipe exists when recipeId is provided
+  if (recipeId !== null) {
+    const recipe = await prisma.recipe.findUnique({ where: { id: recipeId } });
+    if (!recipe) {
+      return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+    }
+  }
+
   // Check meal plan exists
   const mealPlan = await prisma.mealPlan.findUnique({ where: { id } });
   if (!mealPlan) {

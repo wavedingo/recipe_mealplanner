@@ -3,10 +3,10 @@ import { prisma } from '@/lib/db';
 
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const day = d.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
   const diff = day === 0 ? -6 : 1 - day; // adjust to Monday
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + diff);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
@@ -28,11 +28,16 @@ export async function GET(req: NextRequest) {
   // Normalize to start of day UTC
   weekStart.setUTCHours(0, 0, 0, 0);
 
-  // Try to find existing meal plan for this week
-  let mealPlan = await prisma.mealPlan.findFirst({
-    where: {
+  // Atomically get or create the meal plan for this week
+  const mealPlan = await prisma.mealPlan.upsert({
+    where: { weekStartDate: weekStart },
+    create: {
       weekStartDate: weekStart,
+      entries: {
+        create: Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i })),
+      },
     },
+    update: {},
     include: {
       entries: {
         include: {
@@ -48,32 +53,6 @@ export async function GET(req: NextRequest) {
       },
     },
   });
-
-  // If no meal plan exists, create one with 7 empty entries
-  if (!mealPlan) {
-    mealPlan = await prisma.mealPlan.create({
-      data: {
-        weekStartDate: weekStart,
-        entries: {
-          create: Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i })),
-        },
-      },
-      include: {
-        entries: {
-          include: {
-            recipe: {
-              select: {
-                id: true,
-                title: true,
-                imageUrl: true,
-              },
-            },
-          },
-          orderBy: { dayOfWeek: 'asc' },
-        },
-      },
-    });
-  }
 
   return NextResponse.json(mealPlan);
 }

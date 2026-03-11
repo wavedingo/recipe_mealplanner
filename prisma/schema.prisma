@@ -44,7 +44,7 @@ model RecipeTag {
 
 model MealPlan {
   id            String         @id @default(cuid())
-  weekStartDate DateTime       // Monday of the week
+  weekStartDate DateTime       @unique // Monday of the week
   entries       MealPlanEntry[]
   groceryList   GroceryList?
   createdAt     DateTime       @default(now())
