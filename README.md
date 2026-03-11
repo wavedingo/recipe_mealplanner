@@ -1,36 +1,155 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Recipe & Meal Planner
 
-## Getting Started
+A self-hosted meal planning app with recipe import, AI-powered suggestions, and email-based recipe capture. Built with Next.js, Prisma, and PostgreSQL.
 
-First, run the development server:
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (v2+)
+- An Anthropic API key (for AI meal plan suggestions)
+- Optional: an IMAP email account for automatic recipe capture from forwarded emails
+
+## Setup
+
+### 1. Configure environment variables
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set at minimum:
+
+```env
+DATABASE_URL=postgresql://mealplanner:mealplanner@db:5432/mealplanner
+AUTH_SECRET=<random secret, generate with: openssl rand -base64 32>
+HOUSEHOLD_PASSWORD_HASH=<bcrypt hash of your household password>
+ANTHROPIC_API_KEY=<your Anthropic API key>
+```
+
+### 2. Generate a household password hash
+
+The app uses a single shared household password. Generate a bcrypt hash of your chosen password:
+
+```bash
+node -e "const b = require('bcryptjs'); b.hash('your-password', 10).then(h => console.log(h))"
+```
+
+Paste the output as `HOUSEHOLD_PASSWORD_HASH` in your `.env` file.
+
+### 3. Run with Docker Compose
+
+```bash
+docker compose up --build -d
+```
+
+This will:
+- Build the Next.js app image
+- Start a PostgreSQL 16 database
+- Run any pending database migrations automatically
+- Start the app on port 3000
+
+### 4. Access the app
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+If running on a home server, replace `localhost` with the server's local IP address, e.g. `http://192.168.1.100:3000`.
+
+### 5. Stopping the app
+
+```bash
+docker compose down
+```
+
+To also remove the database volume (all data will be lost):
+
+```bash
+docker compose down -v
+```
+
+## Email Recipe Poller
+
+The app can capture recipes from emails forwarded to a designated inbox. The poller is not a persistent daemon — it is designed to be run periodically via cron.
+
+### Cron setup example
+
+Add an entry to your crontab (`crontab -e`) to poll every 15 minutes:
+
+```cron
+*/15 * * * * docker compose -f /path/to/app/docker-compose.yml exec -T app node scripts/poll-email.js >> /var/log/recipe-poller.log 2>&1
+```
+
+Or if running the poller as a separate script on the host:
+
+```cron
+*/15 * * * * cd /path/to/app && node scripts/poll-email.js >> /var/log/recipe-poller.log 2>&1
+```
+
+Set the following variables in `.env` to enable email polling:
+
+```env
+IMAP_HOST=imap.example.com
+IMAP_PORT=993
+IMAP_USER=recipes@example.com
+IMAP_PASSWORD=your-imap-password
+IMAP_MAILBOX=INBOX
+```
+
+## Development Setup
+
+To run locally against a development database:
+
+### 1. Start a local PostgreSQL instance
+
+```bash
+docker run -d \
+  --name mealplanner-dev-db \
+  -e POSTGRES_USER=mealplanner \
+  -e POSTGRES_PASSWORD=mealplanner \
+  -e POSTGRES_DB=mealplanner \
+  -p 5432:5432 \
+  postgres:16-alpine
+```
+
+### 2. Configure your local `.env`
+
+```env
+DATABASE_URL=postgresql://mealplanner:mealplanner@localhost:5432/mealplanner
+```
+
+### 3. Apply migrations and generate the Prisma client
+
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+### 4. Start the development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+  app/          # Next.js App Router pages and API routes
+  components/   # React components
+  lib/          # Shared utilities (db, auth, AI client, etc.)
+prisma/
+  schema.prisma # Database schema
+  migrations/   # Applied migration files
+scripts/        # Standalone scripts (email poller, etc.)
+```
 
-## Learn More
+## Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Framework:** Next.js 16 (App Router)
+- **Database:** PostgreSQL 16 via Prisma ORM
+- **Auth:** NextAuth.js v5
+- **AI:** Anthropic Claude API
+- **Email:** ImapFlow
+- **Styling:** Tailwind CSS v4
