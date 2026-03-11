@@ -55,9 +55,11 @@ export async function POST(req: NextRequest) {
     ? (data.tags as unknown[]).filter((t): t is string => typeof t === 'string')
     : [];
 
+  const normalizedTags = tags.map((t: string) => t.trim().toLowerCase()).filter(Boolean);
+
   // Upsert tags
   const tagRecords = await Promise.all(
-    tags.map((name) =>
+    normalizedTags.map((name) =>
       prisma.tag.upsert({
         where: { name },
         update: {},

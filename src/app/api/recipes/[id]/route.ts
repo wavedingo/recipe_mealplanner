@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
 export async function GET(
@@ -25,12 +26,6 @@ export async function PUT(
 ) {
   const { id } = await params;
 
-  // Ensure the recipe exists
-  const existing = await prisma.recipe.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -44,8 +39,12 @@ export async function PUT(
 
   const data = body as Record<string, unknown>;
 
-  const tags: string[] | undefined = Array.isArray(data.tags)
+  const rawTags: string[] | undefined = Array.isArray(data.tags)
     ? (data.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+    : undefined;
+
+  const tags = rawTags !== undefined
+    ? rawTags.map((t: string) => t.trim().toLowerCase()).filter(Boolean)
     : undefined;
 
   // Build the update payload — only include fields that are explicitly provided
@@ -63,35 +62,43 @@ export async function PUT(
   if (data.notes !== undefined) updateData.notes = typeof data.notes === 'string' ? data.notes : null;
 
   // Handle tag replacement in a transaction
-  const recipe = await prisma.$transaction(async (tx) => {
-    if (tags !== undefined) {
-      // Delete existing RecipeTags
+  try {
+    const recipe = await prisma.$transaction(async (tx) => {
+      // delete existing tags first
       await tx.recipeTag.deleteMany({ where: { recipeId: id } });
 
-      // Upsert tags and create new RecipeTags
-      const tagRecords = await Promise.all(
-        tags.map((name) =>
-          tx.tag.upsert({
-            where: { name },
-            update: {},
-            create: { name },
-          })
-        )
-      );
+      if (tags !== undefined) {
+        // Upsert tags and create new RecipeTags
+        const tagRecords = await Promise.all(
+          tags.map((name) =>
+            tx.tag.upsert({
+              where: { name },
+              update: {},
+              create: { name },
+            })
+          )
+        );
 
-      updateData.tags = {
-        create: tagRecords.map((tag) => ({ tagId: tag.id })),
-      };
-    }
+        updateData.tags = {
+          create: tagRecords.map((tag) => ({ tagId: tag.id })),
+        };
+      }
 
-    return tx.recipe.update({
-      where: { id },
-      data: updateData,
-      include: { tags: { include: { tag: true } } },
+      // update recipe (will throw P2025 if not found)
+      return tx.recipe.update({
+        where: { id },
+        data: updateData,
+        include: { tags: { include: { tag: true } } },
+      });
     });
-  });
 
-  return NextResponse.json(recipe);
+    return NextResponse.json(recipe);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+    }
+    throw err;
+  }
 }
 
 export async function DELETE(
@@ -100,13 +107,14 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
-  const existing = await prisma.recipe.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+  try {
+    // RecipeTags and MealPlanEntries cascade delete via schema onDelete: Cascade / SetNull
+    await prisma.recipe.delete({ where: { id } });
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+    }
+    throw err;
   }
-
-  // RecipeTags and MealPlanEntries cascade delete via schema onDelete: Cascade / SetNull
-  await prisma.recipe.delete({ where: { id } });
-
-  return new NextResponse(null, { status: 204 });
 }
