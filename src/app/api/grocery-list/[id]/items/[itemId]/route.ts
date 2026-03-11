@@ -58,7 +58,7 @@ export async function PATCH(
       ...(typeof data.name === 'string' && data.name.trim() && { name: data.name.trim() }),
       ...(typeof data.amount === 'number' && { amount: data.amount }),
       ...(data.amount === null && { amount: null }),
-      ...(typeof data.unit === 'string' && { unit: data.unit }),
+      ...(data.unit !== undefined && { unit: data.unit }),
     },
   });
 

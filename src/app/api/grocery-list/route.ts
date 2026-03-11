@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     let list = mealPlan.groceryList;
 
     if (list) {
-      // Delete all auto-generated items (keep manual ones... but spec says replace all)
+      // Delete all existing items and regenerate from meal plan
       await tx.groceryItem.deleteMany({
         where: { groceryListId: list.id },
       });

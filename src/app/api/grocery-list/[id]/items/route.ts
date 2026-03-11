@@ -37,6 +37,7 @@ export async function POST(
       amount: typeof data.amount === 'number' ? data.amount : null,
       unit: typeof data.unit === 'string' ? data.unit : null,
       category: typeof data.category === 'string' ? data.category : 'other',
+      checked: false,
       isManual: true,
     },
   });
