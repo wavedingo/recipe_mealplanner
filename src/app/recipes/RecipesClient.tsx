@@ -3,6 +3,7 @@
 import { useState, useCallback, useTransition } from 'react';
 import RecipeCard from '@/components/RecipeCard';
 import type { ParsedRecipe, Ingredient, RecipeStep } from '@/types/index';
+import { parseSimpleIngredients, parseSimpleSteps, parseOptionalInt } from '@/lib/recipe-utils';
 
 interface RecipeTag {
   tag: { id: string; name: string };
@@ -34,37 +35,7 @@ interface RecipesClientProps {
 
 type ModalTab = 'url' | 'manual';
 
-interface ParsedPreview extends ParsedRecipe {
-  // same shape, we just alias for clarity
-}
-
-function parseSimpleIngredients(lines: string[]): Ingredient[] {
-  return lines.filter(Boolean).map((line) => {
-    const trimmed = line.trim();
-    // Try to extract a leading number (amount), then optional unit, then rest = name
-    const match = trimmed.match(/^([\d./]+(?:\s*[\d./]+)?)\s*([a-zA-Z]+)?\s+(.+)$/);
-    if (match) {
-      const amount = parseFloat(match[1].replace(/\s+/g, ''));
-      const possibleUnit = match[2] ?? null;
-      const rest = match[3] ?? '';
-      const knownUnits = new Set([
-        'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'lbs', 'g', 'kg', 'ml', 'l',
-        'clove', 'cloves', 'piece', 'pieces', 'slice', 'slices', 'can', 'cans',
-        'bunch', 'handful', 'pinch', 'dash', 'quart', 'pint', 'gallon',
-      ]);
-      if (possibleUnit && knownUnits.has(possibleUnit.toLowerCase())) {
-        return { amount: isNaN(amount) ? null : amount, unit: possibleUnit, name: rest, notes: null };
-      }
-      // No recognized unit — unit is part of name
-      return { amount: isNaN(amount) ? null : amount, unit: null, name: (possibleUnit ? possibleUnit + ' ' + rest : rest).trim(), notes: null };
-    }
-    return { amount: null, unit: null, name: trimmed, notes: null };
-  });
-}
-
-function parseSimpleSteps(lines: string[]): RecipeStep[] {
-  return lines.filter(Boolean).map((line, i) => ({ order: i + 1, text: line.trim() }));
-}
+type ParsedPreview = ParsedRecipe;
 
 interface RecipeFormData {
   title: string;
@@ -115,9 +86,9 @@ function formDataToPayload(form: RecipeFormData) {
     description: form.description.trim() || undefined,
     sourceUrl: form.sourceUrl.trim() || undefined,
     imageUrl: form.imageUrl.trim() || undefined,
-    servings: form.servings ? parseInt(form.servings, 10) : undefined,
-    prepTimeMins: form.prepTimeMins ? parseInt(form.prepTimeMins, 10) : undefined,
-    cookTimeMins: form.cookTimeMins ? parseInt(form.cookTimeMins, 10) : undefined,
+    servings: parseOptionalInt(form.servings),
+    prepTimeMins: parseOptionalInt(form.prepTimeMins),
+    cookTimeMins: parseOptionalInt(form.cookTimeMins),
     tags: form.tags
       .split(',')
       .map((t) => t.trim())
@@ -405,7 +376,7 @@ export default function RecipesClient({ initialRecipes }: RecipesClientProps) {
       );
     const matchesTag =
       !activeTag ||
-      r.tags.some(({ tag }) => tag.name === activeTag);
+      r.tags.some(({ tag }) => tag.id === activeTag);
     return matchesSearch && matchesTag;
   });
 
@@ -465,9 +436,9 @@ export default function RecipesClient({ initialRecipes }: RecipesClientProps) {
           {allTags.map((tag) => (
             <button
               key={tag.id}
-              onClick={() => setActiveTag(activeTag === tag.name ? null : tag.name)}
+              onClick={() => setActiveTag(activeTag === tag.id ? null : tag.id)}
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                activeTag === tag.name
+                activeTag === tag.id
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}

@@ -64,10 +64,10 @@ export async function PUT(
   // Handle tag replacement in a transaction
   try {
     const recipe = await prisma.$transaction(async (tx) => {
-      // delete existing tags first
-      await tx.recipeTag.deleteMany({ where: { recipeId: id } });
-
       if (tags !== undefined) {
+        // Delete existing tags and replace with the new set
+        await tx.recipeTag.deleteMany({ where: { recipeId: id } });
+
         // Upsert tags and create new RecipeTags
         const tagRecords = await Promise.all(
           tags.map((name) =>

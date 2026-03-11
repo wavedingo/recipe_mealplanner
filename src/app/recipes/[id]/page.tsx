@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, use } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { parseSimpleIngredients, parseSimpleSteps, parseOptionalInt } from '@/lib/recipe-utils';
 import type { Ingredient, RecipeStep } from '@/types/index';
 
 interface RecipeTag {
@@ -94,7 +94,7 @@ function ServingsAdjuster({
       <span className="text-lg font-semibold w-8 text-center">{current}</span>
       <button
         type="button"
-        onClick={() => onChange(current + 1)}
+        onClick={() => onChange(Math.min(99, current + 1))}
         className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,41 +190,15 @@ function recipeToEditable(r: Recipe): EditableRecipe {
   };
 }
 
-function parseSimpleIngredients(lines: string[]): Ingredient[] {
-  const knownUnits = new Set([
-    'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'lbs', 'g', 'kg', 'ml', 'l',
-    'clove', 'cloves', 'piece', 'pieces', 'slice', 'slices', 'can', 'cans',
-    'bunch', 'handful', 'pinch', 'dash', 'quart', 'pint', 'gallon',
-  ]);
-  return lines.filter(Boolean).map((line) => {
-    const trimmed = line.trim();
-    const match = trimmed.match(/^([\d./]+(?:\s*[\d./]+)?)\s*([a-zA-Z]+)?\s+(.+)$/);
-    if (match) {
-      const amount = parseFloat(match[1].replace(/\s+/g, ''));
-      const possibleUnit = match[2] ?? null;
-      const rest = match[3] ?? '';
-      if (possibleUnit && knownUnits.has(possibleUnit.toLowerCase())) {
-        return { amount: isNaN(amount) ? null : amount, unit: possibleUnit, name: rest, notes: null };
-      }
-      return { amount: isNaN(amount) ? null : amount, unit: null, name: (possibleUnit ? possibleUnit + ' ' + rest : rest).trim(), notes: null };
-    }
-    return { amount: null, unit: null, name: trimmed, notes: null };
-  });
-}
-
-function parseSimpleSteps(lines: string[]): RecipeStep[] {
-  return lines.filter(Boolean).map((line, i) => ({ order: i + 1, text: line.trim() }));
-}
-
 function editableToPayload(e: EditableRecipe) {
   return {
     title: e.title.trim(),
     description: e.description.trim() || null,
     sourceUrl: e.sourceUrl.trim() || null,
     imageUrl: e.imageUrl.trim() || null,
-    servings: e.servings ? parseInt(e.servings, 10) : null,
-    prepTimeMins: e.prepTimeMins ? parseInt(e.prepTimeMins, 10) : null,
-    cookTimeMins: e.cookTimeMins ? parseInt(e.cookTimeMins, 10) : null,
+    servings: parseOptionalInt(e.servings) ?? null,
+    prepTimeMins: parseOptionalInt(e.prepTimeMins) ?? null,
+    cookTimeMins: parseOptionalInt(e.cookTimeMins) ?? null,
     rating: e.rating,
     notes: e.notes.trim() || null,
     tags: e.tags.split(',').map((t) => t.trim()).filter(Boolean),
@@ -237,7 +211,6 @@ function editableToPayload(e: EditableRecipe) {
 
 export default function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
@@ -337,18 +310,21 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
   const handleRatingChange = useCallback(
     async (newRating: number) => {
       if (!recipe) return;
-      setRating(newRating);
+      const previousRating = rating;
+      setRating(newRating); // optimistic update
       try {
-        await fetch(`/api/recipes/${recipe.id}`, {
+        const res = await fetch(`/api/recipes/${recipe.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rating: newRating }),
         });
+        if (!res.ok) throw new Error('Failed to save rating');
       } catch {
-        // silent fail on rating save
+        setRating(previousRating); // rollback on failure
+        showToast('Failed to save rating');
       }
     },
-    [recipe]
+    [recipe, rating, showToast]
   );
 
   const handleNotesSave = useCallback(async () => {
@@ -536,7 +512,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
               fill
               className="object-cover"
               priority
-              unoptimized
+              unoptimized // user-supplied URLs are external; Next.js image optimization requires an allowlist
             />
           </div>
         )}
@@ -681,7 +657,11 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            onBlur={handleNotesSave}
+            onBlur={() => {
+              if (notes !== (recipe.notes ?? '')) {
+                handleNotesSave();
+              }
+            }}
             placeholder="Add your personal notes, substitutions, or tips…"
             rows={4}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y bg-gray-50 placeholder-gray-400"

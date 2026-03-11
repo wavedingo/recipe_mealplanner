@@ -58,7 +58,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             fill
             className="object-cover"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            unoptimized
+            unoptimized // user-supplied URLs are external; Next.js image optimization requires an allowlist
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">
