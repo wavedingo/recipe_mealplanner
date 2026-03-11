@@ -78,6 +78,15 @@ describe('parseDuration', () => {
   it('returns undefined for zero duration', () => {
     expect(parseDuration('PT0M')).toBeUndefined();
   });
+
+  it('returns undefined for months-only duration (P2M has no time component)', () => {
+    expect(parseDuration('P2M')).toBeUndefined();
+  });
+
+  it('uses only H and M from the time component in P1Y2M3DT4H5M', () => {
+    // 4 hours * 60 + 5 minutes = 245; months/years/days are ignored
+    expect(parseDuration('P1Y2M3DT4H5M')).toBe(245);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -389,5 +398,80 @@ describe('parseRecipeFromUrl — error handling', () => {
     await expect(parseRecipeFromUrl('https://example.com/broken')).rejects.toThrow(
       'Failed to fetch recipe URL'
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Claude error path tests
+// ---------------------------------------------------------------------------
+describe('parseRecipeFromUrl — Claude error paths', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    getMockCreate().mockReset();
+  });
+
+  it('throws with "invalid JSON" message when Claude returns non-JSON', async () => {
+    mockHtmlResponse(NO_SCHEMA_HTML);
+    getMockCreate().mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'This is not JSON at all.' }],
+    });
+
+    await expect(parseRecipeFromUrl('https://example.com/no-schema')).rejects.toThrow(
+      /invalid JSON/i
+    );
+  });
+
+  it('throws when Claude returns valid JSON but missing title field', async () => {
+    mockHtmlResponse(NO_SCHEMA_HTML);
+    const noTitle = { ingredients: [], steps: [] };
+    getMockCreate().mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(noTitle) }],
+    });
+
+    await expect(parseRecipeFromUrl('https://example.com/no-schema')).rejects.toThrow(
+      /title/i
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Microdata extraction tests
+// ---------------------------------------------------------------------------
+const MICRODATA_FIXTURE = `
+<!DOCTYPE html>
+<html>
+<body>
+  <div itemscope itemtype="https://schema.org/Recipe">
+    <span itemprop="name">Microdata Pasta</span>
+    <span itemprop="description">A simple pasta dish.</span>
+    <meta itemprop="recipeYield" content="4">
+    <meta itemprop="prepTime" content="PT10M">
+    <meta itemprop="cookTime" content="PT20M">
+    <span itemprop="recipeIngredient">200 g pasta</span>
+    <span itemprop="recipeIngredient">1 tsp salt</span>
+    <span itemprop="recipeInstructions">Boil water.</span>
+    <span itemprop="recipeInstructions">Cook pasta.</span>
+  </div>
+</body>
+</html>
+`;
+
+describe('parseRecipeFromUrl — microdata extraction', () => {
+  beforeEach(() => mockFetch.mockReset());
+
+  it('extracts a recipe from microdata when no JSON-LD is present', async () => {
+    mockHtmlResponse(MICRODATA_FIXTURE);
+    const recipe = await parseRecipeFromUrl('https://example.com/microdata');
+
+    expect(recipe.title).toBe('Microdata Pasta');
+    expect(recipe.description).toBe('A simple pasta dish.');
+    expect(recipe.servings).toBe(4);
+    expect(recipe.prepTimeMins).toBe(10);
+    expect(recipe.cookTimeMins).toBe(20);
+    expect(recipe.ingredients).toHaveLength(2);
+    expect(recipe.ingredients[0].name).toContain('pasta');
+    expect(recipe.steps).toHaveLength(2);
+    expect(recipe.steps[0].text).toBe('Boil water.');
+    expect(recipe.steps[1].text).toBe('Cook pasta.');
   });
 });

@@ -15,8 +15,9 @@ export function parseDuration(duration: string | undefined | null): number | und
   if (!duration) return undefined;
   // ISO 8601 duration: P[nD]T[nH][nM]
   // We only care about hours and minutes; ignore days, weeks, months, years.
-  const hoursMatch = duration.match(/(\d+(?:\.\d+)?)H/i);
-  const minutesMatch = duration.match(/(\d+(?:\.\d+)?)M/i);
+  // Anchor H and M to the time component (after T) to avoid matching months (P2M).
+  const hoursMatch = duration.match(/T.*?(\d+(?:\.\d+)?)H/);
+  const minutesMatch = duration.match(/T.*?(\d+(?:\.\d+)?)M/);
   if (!hoursMatch && !minutesMatch) return undefined;
   const hours = hoursMatch ? parseFloat(hoursMatch[1]) : 0;
   const minutes = minutesMatch ? parseFloat(minutesMatch[1]) : 0;
@@ -37,7 +38,7 @@ const UNITS = [
   'grams', 'gram', 'gs', 'g',
   'kilograms', 'kilogram', 'kgs', 'kg',
   'milliliters', 'milliliter', 'mls', 'ml',
-  'liters', 'liter', 'ls', 'l',
+  'liters', 'liter', 'l',
   'pinches', 'pinch',
   'handfuls', 'handful',
   'cloves', 'clove',
@@ -60,7 +61,7 @@ const UNITS = [
   'dashes', 'dash',
 ];
 
-// Sorted longest-first to avoid partial matches (e.g. "tablespoon" before "tbsp")
+// Sorted longest-first to avoid partial matches (e.g. 'tablespoon' matches before 'tbsp')
 const UNITS_SORTED = [...UNITS].sort((a, b) => b.length - a.length);
 
 // Regex to match common fraction characters + regular fractions
@@ -145,7 +146,7 @@ export function parseIngredient(raw: string): Ingredient {
     }
   }
 
-  const name = rest.trim() || (amount === null ? raw.trim() : raw.trim());
+  const name = rest.trim() || raw.trim();
 
   return {
     amount,
@@ -397,6 +398,14 @@ interface ParsedRecipe {
 }
 `.trim();
 
+let _anthropicClient: Anthropic | null = null;
+function getAnthropicClient(): Anthropic {
+  if (!_anthropicClient) {
+    _anthropicClient = new Anthropic();
+  }
+  return _anthropicClient;
+}
+
 async function extractWithClaude(html: string, url: string): Promise<ParsedRecipe> {
   // Strip script and style tags, then take first 15k chars
   const stripped = html
@@ -404,7 +413,7 @@ async function extractWithClaude(html: string, url: string): Promise<ParsedRecip
     .replace(/<style[\s\S]*?<\/style>/gi, '');
   const truncated = stripped.slice(0, 15000);
 
-  const client = new Anthropic();
+  const client = getAnthropicClient();
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -443,6 +452,21 @@ async function extractWithClaude(html: string, url: string): Promise<ParsedRecip
   if (!obj.title || typeof obj.title !== 'string') {
     throw new Error('Claude API response missing required title field');
   }
+
+  // Coerce numeric fields that Claude may return as strings
+  const coerceInt = (v: unknown): number | undefined => {
+    if (typeof v === 'number' && !isNaN(v)) return v;
+    if (typeof v === 'string') {
+      const n = parseInt(v, 10);
+      return isNaN(n) ? undefined : n;
+    }
+    return undefined;
+  };
+  obj.servings = coerceInt(obj.servings) ?? undefined;
+  obj.prepTimeMins = coerceInt(obj.prepTimeMins) ?? undefined;
+  obj.cookTimeMins = coerceInt(obj.cookTimeMins) ?? undefined;
+  if (typeof obj.imageUrl !== 'string') obj.imageUrl = undefined;
+  if (typeof obj.description !== 'string') obj.description = undefined;
 
   // Ensure arrays exist
   if (!Array.isArray(obj.ingredients)) obj.ingredients = [];
