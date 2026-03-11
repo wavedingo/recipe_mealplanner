@@ -1,4 +1,4 @@
-import { signIn } from '@/lib/auth';
+import { auth, signIn } from '@/lib/auth';
 import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 
@@ -7,6 +7,11 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const session = await auth();
+  if (session) redirect('/recipes');
+
+  // Note: only the presence of `error` is checked below, not its value,
+  // so the query param is never rendered directly into the DOM.
   const { error } = await searchParams;
 
   async function handleSignIn(formData: FormData) {
@@ -20,6 +25,8 @@ export default async function LoginPage({
       if (err instanceof AuthError) {
         redirect(`/login?error=InvalidCredentials`);
       }
+      // Re-throw non-AuthError (e.g. NEXT_REDIRECT from next-auth signIn with redirectTo)
+      // so Next.js can handle the redirect correctly.
       throw err;
     }
   }
