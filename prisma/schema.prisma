@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Recipe {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  sourceUrl    String?
+  imageUrl     String?
+  servings     Int?
+  prepTimeMins Int?
+  cookTimeMins Int?
+  ingredients  Json     // [{amount: Float|null, unit: string|null, name: string, notes: string|null}]
+  steps        Json     // [{order: number, text: string}]
+  rating       Int?     // 1–5
+  notes        String?
+  tags         RecipeTag[]
+  mealPlanEntries MealPlanEntry[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Tag {
+  id      String      @id @default(cuid())
+  name    String      @unique
+  recipes RecipeTag[]
+}
+
+model RecipeTag {
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId String
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId    String
+  @@id([recipeId, tagId])
+}
+
+model MealPlan {
+  id            String         @id @default(cuid())
+  weekStartDate DateTime       // Monday of the week
+  entries       MealPlanEntry[]
+  groceryList   GroceryList?
+  createdAt     DateTime       @default(now())
+}
+
+model MealPlanEntry {
+  id          String    @id @default(cuid())
+  mealPlan    MealPlan  @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  mealPlanId  String
+  dayOfWeek   Int       // 0=Mon … 6=Sun
+  recipe      Recipe?   @relation(fields: [recipeId], references: [id])
+  recipeId    String?
+}
+
+model GroceryList {
+  id         String        @id @default(cuid())
+  mealPlan   MealPlan      @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  mealPlanId String        @unique
+  items      GroceryItem[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model GroceryItem {
+  id            String      @id @default(cuid())
+  groceryList   GroceryList @relation(fields: [groceryListId], references: [id], onDelete: Cascade)
+  groceryListId String
+  name          String
+  amount        Float?
+  unit          String?
+  category      String      @default("other")
+  checked       Boolean     @default(false)
+  isManual      Boolean     @default(false)
+}
