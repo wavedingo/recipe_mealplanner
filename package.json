@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -14,6 +16,7 @@
     "convert-units": "^2.3.4",
     "imapflow": "^1.2.13",
     "next": "16.1.6",
+    "bcryptjs": "^3.0.3",
     "next-auth": "^5.0.0-beta.30",
     "prisma": "^7.4.2",
     "react": "19.2.3",
@@ -25,7 +28,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "bcryptjs": "^3.0.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

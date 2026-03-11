@@ -55,7 +55,7 @@ model MealPlanEntry {
   mealPlan    MealPlan  @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
   mealPlanId  String
   dayOfWeek   Int       // 0=Mon … 6=Sun
-  recipe      Recipe?   @relation(fields: [recipeId], references: [id])
+  recipe      Recipe?   @relation(fields: [recipeId], references: [id], onDelete: SetNull)
   recipeId    String?
 }
 
