@@ -12,11 +12,11 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@prisma/client": "^7.4.2",
+    "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "convert-units": "^2.3.4",
     "imapflow": "^1.2.13",
     "next": "16.1.6",
-    "bcryptjs": "^3.0.3",
     "next-auth": "^5.0.0-beta.30",
     "prisma": "^7.4.2",
     "react": "19.2.3",
@@ -25,10 +25,13 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jest": "^30.3.0",
     "tailwindcss": "^4",
+    "ts-jest": "^29.4.6",
     "typescript": "^5"
   }
 }
