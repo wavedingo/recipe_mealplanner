@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { parseSimpleIngredients, parseSimpleSteps, parseOptionalInt } from '@/lib/recipe-utils';
 import type { Ingredient, RecipeStep } from '@/types/index';
 
+const MEAL_TAG_OPTIONS = ['breakfast', 'lunch', 'dinner', 'dessert', 'sides'];
+const DIETARY_TAG_OPTIONS = ['gluten-free', 'vegan', 'vegetarian', 'dairy-free', 'nut-free'];
+
 interface RecipeTag {
   tag: { id: string; name: string };
 }
@@ -91,7 +94,7 @@ function ServingsAdjuster({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
         </svg>
       </button>
-      <span className="text-lg font-semibold w-8 text-center">{current}</span>
+      <span className="text-lg font-semibold w-8 text-center text-gray-900">{current}</span>
       <button
         type="button"
         onClick={() => onChange(Math.min(99, current + 1))}
@@ -166,12 +169,18 @@ interface EditableRecipe {
   cookTimeMins: string;
   rating: number | null;
   notes: string;
-  tags: string;
+  mealTags: string[];
+  dietaryTags: string[];
+  customTags: string;
   ingredientsRaw: string;
   stepsRaw: string;
 }
 
 function recipeToEditable(r: Recipe): EditableRecipe {
+  const allTagNames = r.tags.map(({ tag }) => tag.name.toLowerCase());
+  const mealTags = allTagNames.filter((t) => MEAL_TAG_OPTIONS.includes(t));
+  const dietaryTags = allTagNames.filter((t) => DIETARY_TAG_OPTIONS.includes(t));
+  const customTagList = allTagNames.filter((t) => !MEAL_TAG_OPTIONS.includes(t) && !DIETARY_TAG_OPTIONS.includes(t));
   return {
     title: r.title,
     description: r.description ?? '',
@@ -182,7 +191,9 @@ function recipeToEditable(r: Recipe): EditableRecipe {
     cookTimeMins: r.cookTimeMins != null ? String(r.cookTimeMins) : '',
     rating: r.rating ?? null,
     notes: r.notes ?? '',
-    tags: r.tags.map(({ tag }) => tag.name).join(', '),
+    mealTags,
+    dietaryTags,
+    customTags: customTagList.join(', '),
     ingredientsRaw: r.ingredients
       .map((ing) => [ing.amount, ing.unit, ing.name].filter(Boolean).join(' '))
       .join('\n'),
@@ -191,6 +202,7 @@ function recipeToEditable(r: Recipe): EditableRecipe {
 }
 
 function editableToPayload(e: EditableRecipe) {
+  const customTagList = e.customTags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
   return {
     title: e.title.trim(),
     description: e.description.trim() || null,
@@ -201,7 +213,7 @@ function editableToPayload(e: EditableRecipe) {
     cookTimeMins: parseOptionalInt(e.cookTimeMins) ?? null,
     rating: e.rating,
     notes: e.notes.trim() || null,
-    tags: e.tags.split(',').map((t) => t.trim()).filter(Boolean),
+    tags: [...e.mealTags, ...e.dietaryTags, ...customTagList],
     ingredients: parseSimpleIngredients(e.ingredientsRaw.split('\n')),
     steps: parseSimpleSteps(e.stepsRaw.split('\n')),
   };
@@ -348,6 +360,33 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
     showToast('Feature coming soon — meal plan integration in progress!');
   };
 
+  const handleDelete = async () => {
+    if (!recipe) return;
+    if (!confirm(`Delete "${recipe.title}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/recipes/${recipe.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      window.location.href = '/recipes';
+    } catch {
+      showToast('Failed to delete recipe');
+    }
+  };
+
+  const handleShare = async () => {
+    if (!recipe) return;
+    const shareUrl = recipe.sourceUrl || window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: recipe.title, url: shareUrl });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('Link copied to clipboard!');
+      }
+    } catch {
+      // user cancelled share or clipboard failed
+    }
+  };
+
   // ── Loading / Error states ──────────────────────────────────────────────
 
   if (loading) {
@@ -399,6 +438,12 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
             <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
               <h1 className="text-xl font-semibold text-gray-900">Edit Recipe</h1>
               <div className="flex gap-3">
+                <button
+                  onClick={handleDelete}
+                  className="px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  Delete
+                </button>
                 <button onClick={handleCancelEdit} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                   Cancel
                 </button>
@@ -419,32 +464,43 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
             <div className="px-6 py-5 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                <input value={editData.title} onChange={update('title')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input value={editData.title} onChange={update('title')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea value={editData.description} onChange={update('description')} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
+                <textarea value={editData.description} onChange={update('description')} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Source URL</label>
-                <input type="url" value={editData.sourceUrl} onChange={update('sourceUrl')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="url" value={editData.sourceUrl} onChange={update('sourceUrl')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-                <input type="url" value={editData.imageUrl} onChange={update('imageUrl')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="url" value={editData.imageUrl} onChange={update('imageUrl')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {editData.imageUrl && (
+                  <div className="mt-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={editData.imageUrl}
+                      alt="Preview"
+                      className="h-24 w-36 object-cover rounded-lg border border-gray-200"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Servings</label>
-                  <input type="number" value={editData.servings} onChange={update('servings')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" value={editData.servings} onChange={update('servings')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prep (min)</label>
-                  <input type="number" value={editData.prepTimeMins} onChange={update('prepTimeMins')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" value={editData.prepTimeMins} onChange={update('prepTimeMins')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cook (min)</label>
-                  <input type="number" value={editData.cookTimeMins} onChange={update('cookTimeMins')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" value={editData.cookTimeMins} onChange={update('cookTimeMins')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>
@@ -454,25 +510,70 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
                   onChange={(v) => setEditData((prev) => prev ? { ...prev, rating: v } : prev)}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-                <input value={editData.tags} onChange={update('tags')} placeholder="dinner, chicken, quick" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Meal Type</label>
+                  <div className="flex flex-wrap gap-2">
+                    {MEAL_TAG_OPTIONS.map((tag) => {
+                      const active = editData.mealTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setEditData((prev) => prev ? { ...prev, mealTags: active ? prev.mealTags.filter((t) => t !== tag) : [...prev.mealTags, tag] } : prev)}
+                          className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Dietary</label>
+                  <div className="flex flex-wrap gap-2">
+                    {DIETARY_TAG_OPTIONS.map((tag) => {
+                      const active = editData.dietaryTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setEditData((prev) => prev ? { ...prev, dietaryTags: active ? prev.dietaryTags.filter((t) => t !== tag) : [...prev.dietaryTags, tag] } : prev)}
+                          className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Custom Tags <span className="text-gray-400 font-normal">(comma separated)</span>
+                  </label>
+                  <input
+                    value={editData.customTags}
+                    onChange={(e) => setEditData((prev) => prev ? { ...prev, customTags: e.target.value } : prev)}
+                    placeholder="quick, weeknight, make-ahead"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Ingredients <span className="text-gray-400 font-normal">(one per line)</span>
                 </label>
-                <textarea value={editData.ingredientsRaw} onChange={update('ingredientsRaw')} rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
+                <textarea value={editData.ingredientsRaw} onChange={update('ingredientsRaw')} rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Steps <span className="text-gray-400 font-normal">(one per line)</span>
                 </label>
-                <textarea value={editData.stepsRaw} onChange={update('stepsRaw')} rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
+                <textarea value={editData.stepsRaw} onChange={update('stepsRaw')} rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea value={editData.notes} onChange={update('notes')} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
+                <textarea value={editData.notes} onChange={update('notes')} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
               </div>
             </div>
           </div>
@@ -549,6 +650,15 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
                 Edit
+              </button>
+              <button
+                onClick={handleShare}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                Share
               </button>
               <button
                 onClick={handleAddToMealPlan}

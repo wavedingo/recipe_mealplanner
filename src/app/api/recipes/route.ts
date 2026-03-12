@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
 
   const normalizedTags = tags.map((t: string) => t.trim().toLowerCase()).filter(Boolean);
 
-  // Upsert tags
+  // Upsert tags (deduplicate names first to avoid duplicate RecipeTag rows)
+  const uniqueTagNames = [...new Set(normalizedTags)];
   const tagRecords = await Promise.all(
-    normalizedTags.map((name) =>
+    uniqueTagNames.map((name) =>
       prisma.tag.upsert({
         where: { name },
         update: {},

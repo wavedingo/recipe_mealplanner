@@ -42,10 +42,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
-# Copy node_modules that contain the Prisma CLI for migrations
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Copy full node_modules — Prisma 7 CLI has a deep dependency tree
+# that cannot be selectively copied without missing transitive deps
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

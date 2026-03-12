@@ -45,10 +45,15 @@ interface RecipeFormData {
   servings: string;
   prepTimeMins: string;
   cookTimeMins: string;
-  tags: string;
+  mealTags: string[];
+  dietaryTags: string[];
+  customTags: string;
   ingredientsRaw: string;
   stepsRaw: string;
 }
+
+const MEAL_TAG_OPTIONS = ['breakfast', 'lunch', 'dinner', 'dessert', 'sides'];
+const DIETARY_TAG_OPTIONS = ['gluten-free', 'vegan', 'vegetarian', 'dairy-free', 'nut-free'];
 
 const emptyForm = (): RecipeFormData => ({
   title: '',
@@ -58,7 +63,9 @@ const emptyForm = (): RecipeFormData => ({
   servings: '',
   prepTimeMins: '',
   cookTimeMins: '',
-  tags: '',
+  mealTags: [],
+  dietaryTags: [],
+  customTags: '',
   ingredientsRaw: '',
   stepsRaw: '',
 });
@@ -72,7 +79,9 @@ function parsedToFormData(p: ParsedPreview): RecipeFormData {
     servings: p.servings != null ? String(p.servings) : '',
     prepTimeMins: p.prepTimeMins != null ? String(p.prepTimeMins) : '',
     cookTimeMins: p.cookTimeMins != null ? String(p.cookTimeMins) : '',
-    tags: (p.tags ?? []).join(', '),
+    mealTags: [],
+    dietaryTags: [],
+    customTags: '',
     ingredientsRaw: p.ingredients
       .map((ing) => [ing.amount, ing.unit, ing.name].filter(Boolean).join(' '))
       .join('\n'),
@@ -81,6 +90,11 @@ function parsedToFormData(p: ParsedPreview): RecipeFormData {
 }
 
 function formDataToPayload(form: RecipeFormData) {
+  const customTagList = form.customTags
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+  const allTags = [...form.mealTags, ...form.dietaryTags, ...customTagList];
   return {
     title: form.title.trim(),
     description: form.description.trim() || undefined,
@@ -89,10 +103,7 @@ function formDataToPayload(form: RecipeFormData) {
     servings: parseOptionalInt(form.servings),
     prepTimeMins: parseOptionalInt(form.prepTimeMins),
     cookTimeMins: parseOptionalInt(form.cookTimeMins),
-    tags: form.tags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean),
+    tags: allTags,
     ingredients: parseSimpleIngredients(form.ingredientsRaw.split('\n')),
     steps: parseSimpleSteps(form.stepsRaw.split('\n')),
   };
@@ -103,23 +114,80 @@ interface RecipeFormProps {
   onChange: (updates: Partial<RecipeFormData>) => void;
 }
 
-function RecipeFormFields({ form, onChange }: RecipeFormProps) {
-  const field = (label: string, key: keyof RecipeFormData, type = 'text', placeholder = '') => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        type={type}
-        value={form[key]}
-        onChange={(e) => onChange({ [key]: e.target.value })}
-        placeholder={placeholder}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      />
-    </div>
-  );
+function TagSelector({
+  mealTags,
+  dietaryTags,
+  customTags,
+  onChange,
+}: {
+  mealTags: string[];
+  dietaryTags: string[];
+  customTags: string;
+  onChange: (updates: Partial<RecipeFormData>) => void;
+}) {
+  const toggleMeal = (tag: string) =>
+    onChange({ mealTags: mealTags.includes(tag) ? mealTags.filter((t) => t !== tag) : [...mealTags, tag] });
+  const toggleDietary = (tag: string) =>
+    onChange({ dietaryTags: dietaryTags.includes(tag) ? dietaryTags.filter((t) => t !== tag) : [...dietaryTags, tag] });
+
+  const pillClass = (active: boolean) =>
+    `px-3 py-1 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+      active
+        ? 'bg-blue-600 text-white border-blue-600'
+        : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+    }`;
 
   return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Meal Type</label>
+        <div className="flex flex-wrap gap-2">
+          {MEAL_TAG_OPTIONS.map((tag) => (
+            <button key={tag} type="button" onClick={() => toggleMeal(tag)} className={pillClass(mealTags.includes(tag))}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Dietary</label>
+        <div className="flex flex-wrap gap-2">
+          {DIETARY_TAG_OPTIONS.map((tag) => (
+            <button key={tag} type="button" onClick={() => toggleDietary(tag)} className={pillClass(dietaryTags.includes(tag))}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Custom Tags <span className="text-gray-400 font-normal">(comma separated)</span>
+        </label>
+        <input
+          type="text"
+          value={customTags}
+          onChange={(e) => onChange({ customTags: e.target.value })}
+          placeholder="quick, weeknight, make-ahead"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+    </div>
+  );
+}
+
+function RecipeFormFields({ form, onChange }: RecipeFormProps) {
+  return (
     <div className="space-y-4">
-      {field('Title *', 'title', 'text', 'Recipe title')}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+        <input
+          type="text"
+          value={form.title}
+          onChange={(e) => onChange({ title: e.target.value })}
+          placeholder="Recipe title"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
         <textarea
@@ -127,17 +195,60 @@ function RecipeFormFields({ form, onChange }: RecipeFormProps) {
           onChange={(e) => onChange({ description: e.target.value })}
           placeholder="Short description"
           rows={2}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
         />
       </div>
-      {field('Source URL', 'sourceUrl', 'url', 'https://...')}
-      {field('Image URL', 'imageUrl', 'url', 'https://...')}
-      <div className="grid grid-cols-3 gap-3">
-        {field('Servings', 'servings', 'number', '4')}
-        {field('Prep (min)', 'prepTimeMins', 'number', '15')}
-        {field('Cook (min)', 'cookTimeMins', 'number', '30')}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Source URL</label>
+        <input
+          type="url"
+          value={form.sourceUrl}
+          onChange={(e) => onChange({ sourceUrl: e.target.value })}
+          placeholder="https://..."
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
       </div>
-      {field('Tags', 'tags', 'text', 'dinner, chicken, quick')}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+        <input
+          type="url"
+          value={form.imageUrl}
+          onChange={(e) => onChange({ imageUrl: e.target.value })}
+          placeholder="https://..."
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        {form.imageUrl && (
+          <div className="mt-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={form.imageUrl}
+              alt="Preview"
+              className="h-24 w-36 object-cover rounded-lg border border-gray-200"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Servings</label>
+          <input type="number" value={form.servings} onChange={(e) => onChange({ servings: e.target.value })} placeholder="4" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Prep (min)</label>
+          <input type="number" value={form.prepTimeMins} onChange={(e) => onChange({ prepTimeMins: e.target.value })} placeholder="15" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Cook (min)</label>
+          <input type="number" value={form.cookTimeMins} onChange={(e) => onChange({ cookTimeMins: e.target.value })} placeholder="30" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <TagSelector
+        mealTags={form.mealTags}
+        dietaryTags={form.dietaryTags}
+        customTags={form.customTags}
+        onChange={onChange}
+      />
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Ingredients <span className="text-gray-400 font-normal">(one per line, e.g. &quot;2 cups flour&quot;)</span>
@@ -147,7 +258,7 @@ function RecipeFormFields({ form, onChange }: RecipeFormProps) {
           onChange={(e) => onChange({ ingredientsRaw: e.target.value })}
           placeholder={"2 cups flour\n1 tsp salt\n3 large eggs"}
           rows={6}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
         />
       </div>
       <div>
@@ -159,7 +270,7 @@ function RecipeFormFields({ form, onChange }: RecipeFormProps) {
           onChange={(e) => onChange({ stepsRaw: e.target.value })}
           placeholder={"Preheat oven to 350°F.\nMix dry ingredients.\nBake for 30 minutes."}
           rows={6}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
         />
       </div>
     </div>
@@ -195,7 +306,12 @@ function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setParseError(data.error ?? 'Failed to parse recipe');
+        const errMsg = data.error ?? 'Failed to parse recipe';
+        if (errMsg.includes('403') || errMsg.includes('Forbidden')) {
+          setParseError('This site blocks automated access. Switch to the Manual Entry tab to add this recipe yourself.');
+        } else {
+          setParseError(errMsg);
+        }
         return;
       }
       setForm(parsedToFormData(data as ParsedPreview));
@@ -289,7 +405,7 @@ function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
                     onChange={(e) => setUrlInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleParse()}
                     placeholder="https://www.example.com/recipe"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <button
                     onClick={handleParse}

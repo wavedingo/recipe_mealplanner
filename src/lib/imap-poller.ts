@@ -23,7 +23,7 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
     port: parseInt(process.env.IMAP_PORT || '993', 10),
     secure: true,
     auth: { user, pass },
-    logger: false,
+    logger: process.env.NODE_ENV !== 'production' ? undefined : false,
   });
 
   let processed = 0;
@@ -51,7 +51,7 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
         const source = message.source;
         if (!source) continue;
         const bodyText = source.toString('utf-8');
-        const urls = bodyText.match(URL_REGEX) ?? [];
+        const urls = [...new Set(bodyText.match(URL_REGEX) ?? [])];
 
         for (const url of urls) {
           try {
@@ -102,7 +102,7 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
     await client.logout();
   } catch (err) {
     const msg = `IMAP connection error: ${err instanceof Error ? err.message : String(err)}`;
-    console.error(`[imap-poller] ${msg}`);
+    console.error(`[imap-poller] ${msg}`, err);
     errors.push(msg);
   }
 
