@@ -400,7 +400,7 @@ export default function MealPlanPage() {
         setGroceryComingSoon(true);
         return;
       }
-      router.push('/grocery-list');
+      router.push(`/grocery-list?weekStart=${formatDateISO(currentMonday)}`);
     } catch {
       setGroceryComingSoon(true);
     } finally {

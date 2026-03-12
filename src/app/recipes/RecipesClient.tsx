@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useTransition } from 'react';
+import Link from 'next/link';
 import RecipeCard from '@/components/RecipeCard';
 import type { ParsedRecipe, Ingredient, RecipeStep } from '@/types/index';
 import { parseSimpleIngredients, parseSimpleSteps, parseOptionalInt } from '@/lib/recipe-utils';
@@ -567,15 +568,26 @@ export default function RecipesClient({ initialRecipes }: RecipesClientProps) {
           <h1 className="text-2xl font-bold text-gray-900">Recipe Library</h1>
           <p className="text-sm text-gray-500 mt-0.5">{recipes.length} recipe{recipes.length !== 1 ? 's' : ''}</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Recipe
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/meal-plan"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Meal Plan
+          </Link>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Recipe
+          </button>
+        </div>
       </div>
 
       {/* Search */}

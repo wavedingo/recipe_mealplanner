@@ -20,7 +20,7 @@ describe('aggregateIngredients', () => {
     ];
     const result = aggregateIngredients(recipes);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('flour');
+    expect(result[0].name).toBe('Flour');
     expect(result[0].unit).toBe('cup');
     expect(result[0].amount).toBeCloseTo(3, 1);
   });
@@ -36,7 +36,7 @@ describe('aggregateIngredients', () => {
     ];
     const result = aggregateIngredients(recipes);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('milk');
+    expect(result[0].name).toBe('Milk');
     // 1 cup = 236.59ml, 2 tbsp = 2 * 14.79ml = 29.57ml => total ~266.16ml
     // 266ml >= 240ml => should be in cups, ~1.13 cups
     expect(result[0].unit).toBe('cup');

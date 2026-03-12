@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { dayOfWeek: 'asc' },
       },
+      groceryList: { select: { id: true } },
     },
   });
 

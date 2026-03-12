@@ -219,6 +219,144 @@ function editableToPayload(e: EditableRecipe) {
   };
 }
 
+// ─── Add to Meal Plan Modal ───────────────────────────────────────────────────
+
+interface MealPlanEntry {
+  id: string;
+  dayOfWeek: number;
+  recipe: { id: string; title: string } | null;
+}
+
+interface MealPlanData {
+  id: string;
+  entries: MealPlanEntry[];
+}
+
+function getMondayOfWeek(offsetWeeks: number): Date {
+  const now = new Date();
+  const day = now.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() + diff + offsetWeeks * 7);
+  monday.setUTCHours(0, 0, 0, 0);
+  return monday;
+}
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function AddToMealPlanModal({
+  recipeId,
+  onClose,
+  onAdded,
+}: {
+  recipeId: string;
+  onClose: () => void;
+  onAdded: (msg: string) => void;
+}) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [mealPlan, setMealPlan] = useState<MealPlanData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    const monday = getMondayOfWeek(weekOffset);
+    const weekStart = monday.toISOString().slice(0, 10);
+    fetch(`/api/meal-plan?weekStart=${weekStart}`)
+      .then((r) => r.json())
+      .then((data) => { setMealPlan(data as MealPlanData); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [weekOffset]);
+
+  const handleDayClick = async (dayOfWeek: number) => {
+    if (!mealPlan || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/meal-plan/${mealPlan.id}/entry`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dayOfWeek, recipeId }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const dayDate = new Date(getMondayOfWeek(weekOffset));
+      dayDate.setUTCDate(dayDate.getUTCDate() + dayOfWeek);
+      const label = dayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      onAdded(`Added to ${label}`);
+      onClose();
+    } catch {
+      setSaving(false);
+    }
+  };
+
+  const monday = getMondayOfWeek(weekOffset);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  const weekLabel = `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}–${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <h2 className="text-base font-semibold text-gray-900">Add to Meal Plan</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4">
+          {/* Week navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setWeekOffset((w) => w - 1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="text-sm font-medium text-gray-700">{weekLabel}</span>
+            <button onClick={() => setWeekOffset((w) => w + 1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Day grid */}
+          {loading ? (
+            <div className="text-center py-6 text-sm text-gray-400">Loading…</div>
+          ) : (
+            <div className="grid grid-cols-7 gap-1.5">
+              {DAY_LABELS.map((label, i) => {
+                const entry = mealPlan?.entries.find((e) => e.dayOfWeek === i);
+                const dayDate = new Date(monday);
+                dayDate.setUTCDate(monday.getUTCDate() + i);
+                const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleDayClick(i)}
+                    disabled={saving}
+                    className="flex flex-col items-center gap-0.5 p-2 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 min-h-[80px]"
+                  >
+                    <span className="text-xs font-semibold text-gray-700">{label}</span>
+                    <span className="text-xs text-gray-400">{dateStr}</span>
+                    {entry?.recipe ? (
+                      <span className="text-xs text-gray-400 leading-tight text-center line-clamp-2 mt-0.5">{entry.recipe.title}</span>
+                    ) : (
+                      <span className="text-xs text-gray-300 mt-0.5">—</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -246,6 +384,9 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
 
   // Toast state
   const [toast, setToast] = useState('');
+
+  // Meal plan modal
+  const [showMealPlanModal, setShowMealPlanModal] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -357,7 +498,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
   }, [recipe, notes, showToast]);
 
   const handleAddToMealPlan = () => {
-    showToast('Feature coming soon — meal plan integration in progress!');
+    setShowMealPlanModal(true);
   };
 
   const handleDelete = async () => {
@@ -787,6 +928,14 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       </div>
+
+      {showMealPlanModal && recipe && (
+        <AddToMealPlanModal
+          recipeId={recipe.id}
+          onClose={() => setShowMealPlanModal(false)}
+          onAdded={(msg) => { showToast(msg); }}
+        />
+      )}
     </div>
   );
 }

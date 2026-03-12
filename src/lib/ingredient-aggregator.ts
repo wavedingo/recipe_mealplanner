@@ -140,20 +140,59 @@ function fromBase(total: number, dimension: Dimension): { amount: number; unit: 
 
 // ─── Name normalization ───────────────────────────────────────────────────────
 
+const STRIP_WORDS = new Set([
+  // preparation descriptors
+  'fresh', 'dried', 'frozen', 'cooked', 'raw', 'canned', 'whole',
+  'large', 'medium', 'small', 'finely', 'thinly', 'roughly', 'coarsely',
+  'chopped', 'diced', 'minced', 'sliced', 'grated', 'shredded', 'peeled',
+  'crushed', 'mashed', 'softened', 'melted', 'beaten', 'packed',
+  'optional', 'divided', 'extra', 'heaping',
+  // units that may still appear as leading words
+  'pound', 'lb', 'oz', 'ounce', 'cup', 'tablespoon', 'teaspoon', 'tbsp', 'tsp',
+]);
+
 function normalizeName(name: string): string {
   let n = name.toLowerCase().trim();
-  // Remove trailing 's' for simple plurals
+  // Strip parenthetical text e.g. "(cut into pats)", "(optional)"
+  n = n.replace(/\s*\([^)]*\)/g, '').trim();
+  // Strip trailing punctuation
+  n = n.replace(/[,;.]+$/, '').trim();
+  // Strip leading descriptor/unit words (keep at least the last word)
+  const words = n.split(/\s+/);
+  let start = 0;
+  while (start < words.length - 1 && STRIP_WORDS.has(words[start])) {
+    start++;
+  }
+  n = words.slice(start).join(' ');
+  // Simple plural normalization (trailing s)
   if (n.endsWith('s') && n.length > 2) {
     n = n.slice(0, -1);
   }
   return n;
 }
 
+function toDisplayName(normalizedKey: string): string {
+  return normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
+}
+
+// ─── Unit extraction from name ────────────────────────────────────────────────
+
+function extractUnitFromName(ing: Ingredient): Ingredient {
+  if (ing.unit !== null) return ing;
+  const words = ing.name.trim().split(/\s+/);
+  if (words.length < 2) return ing;
+  const mapped = UNIT_MAP[words[0].toLowerCase()];
+  if (mapped) {
+    return { ...ing, unit: words[0], name: words.slice(1).join(' ') };
+  }
+  return ing;
+}
+
 // ─── Aggregation ─────────────────────────────────────────────────────────────
 
 export function aggregateIngredients(recipes: RecipeWithIngredients[]): AggregatedItem[] {
-  // Collect all ingredients
-  const allIngredients: Ingredient[] = recipes.flatMap((r) => r.ingredients);
+  // Collect and pre-process all ingredients (extract units embedded in names)
+  const allIngredients: Ingredient[] = recipes.flatMap((r) => r.ingredients).map(extractUnitFromName);
 
   // Group by normalized name
   const byName = new Map<string, Ingredient[]>();
@@ -169,9 +208,9 @@ export function aggregateIngredients(recipes: RecipeWithIngredients[]): Aggregat
 
   const result: AggregatedItem[] = [];
 
-  for (const [, group] of byName) {
-    // Use the first ingredient's name as canonical
-    const canonicalName = group[0].name;
+  for (const [key, group] of byName) {
+    // Derive canonical display name from the normalized key
+    const canonicalName = toDisplayName(key);
     const category = inferCategory(canonicalName);
 
     // Sub-group by unit dimension
@@ -245,7 +284,7 @@ export function aggregateIngredients(recipes: RecipeWithIngredients[]): Aggregat
     // Null-amount items — one item per null-amount ingredient
     for (const ing of nullAmountItems) {
       result.push({
-        name: ing.name,
+        name: canonicalName,
         amount: null,
         unit: ing.unit,
         category,
@@ -256,7 +295,7 @@ export function aggregateIngredients(recipes: RecipeWithIngredients[]): Aggregat
     // Unknown-unit items — one item per ingredient
     for (const ing of unknownUnitItems) {
       result.push({
-        name: ing.name,
+        name: canonicalName,
         amount: ing.amount,
         unit: ing.unit,
         category,
