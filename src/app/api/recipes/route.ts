@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
       steps: Array.isArray(data.steps) ? data.steps : [],
       rating: typeof data.rating === 'number' ? data.rating : undefined,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
+      forkedFromId: typeof data.forkedFromId === 'string' ? data.forkedFromId : undefined,
       tags: {
         create: tagRecords.map((tag) => ({ tagId: tag.id })),
       },

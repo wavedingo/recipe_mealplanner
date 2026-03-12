@@ -24,6 +24,9 @@ model Recipe {
   notes        String?
   tags         RecipeTag[]
   mealPlanEntries MealPlanEntry[]
+  forkedFromId String?
+  forkedFrom   Recipe?  @relation("RecipeForks", fields: [forkedFromId], references: [id], onDelete: SetNull)
+  forks        Recipe[] @relation("RecipeForks")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -57,6 +60,7 @@ model MealPlanEntry {
   dayOfWeek   Int       // 0=Mon … 6=Sun
   recipe      Recipe?   @relation(fields: [recipeId], references: [id], onDelete: SetNull)
   recipeId    String?
+  customLabel String?   // AI-suggested meal name (no library recipe)
 }
 
 model GroceryList {

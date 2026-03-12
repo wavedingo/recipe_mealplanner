@@ -10,7 +10,10 @@ export async function GET(
 
   const recipe = await prisma.recipe.findUnique({
     where: { id },
-    include: { tags: { include: { tag: true } } },
+    include: {
+      tags: { include: { tag: true } },
+      forkedFrom: { select: { id: true, title: true } },
+    },
   });
 
   if (!recipe) {

@@ -29,7 +29,7 @@ function StarRating({ rating }: { rating: number | null | undefined }) {
       {[1, 2, 3, 4, 5].map((star) => (
         <svg
           key={star}
-          className={`w-4 h-4 ${star <= value ? 'text-amber-400' : 'text-gray-300'}`}
+          className={`w-4 h-4 ${star <= value ? 'text-amber-400' : 'text-slate-700'}`}
           fill="currentColor"
           viewBox="0 0 20 20"
         >
@@ -47,21 +47,21 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
   return (
     <Link
       href={`/recipes/${recipe.id}`}
-      className="group block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:border-gray-300 transition-all duration-200"
+      className="group block bg-slate-900 rounded-xl border border-slate-700/60 overflow-hidden hover:border-amber-500/50 hover:shadow-lg hover:shadow-black/40 transition-all duration-200"
     >
       {/* Image */}
-      <div className="relative w-full h-48 bg-gray-100">
+      <div className="relative w-full h-48 bg-slate-800">
         {recipe.imageUrl ? (
           <Image
             src={recipe.imageUrl}
             alt={recipe.title}
             fill
-            className="object-cover"
+            className="object-cover opacity-90 group-hover:opacity-100 transition-opacity"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            unoptimized // user-supplied URLs are external; Next.js image optimization requires an allowlist
+            unoptimized
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="w-full h-full flex items-center justify-center text-slate-600">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -76,7 +76,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
 
       {/* Content */}
       <div className="p-4 space-y-3">
-        <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2 text-base leading-snug">
+        <h3 className="font-semibold text-slate-100 group-hover:text-amber-400 transition-colors line-clamp-2 text-base leading-snug">
           {recipe.title}
         </h3>
 
@@ -86,13 +86,13 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             {recipe.tags.slice(0, 4).map(({ tag }) => (
               <span
                 key={tag.id}
-                className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium"
+                className="px-2 py-0.5 bg-slate-700/60 text-slate-300 text-xs rounded-full font-medium border border-slate-600/40"
               >
                 {tag.name}
               </span>
             ))}
             {recipe.tags.length > 4 && (
-              <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">
+              <span className="px-2 py-0.5 bg-slate-800 text-slate-500 text-xs rounded-full border border-slate-700">
                 +{recipe.tags.length - 4}
               </span>
             )}
@@ -103,7 +103,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         <div className="flex items-center justify-between pt-1">
           <StarRating rating={recipe.rating} />
           {totalTime > 0 && (
-            <span className="text-xs text-gray-500 flex items-center gap-1">
+            <span className="text-xs text-slate-500 flex items-center gap-1">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"

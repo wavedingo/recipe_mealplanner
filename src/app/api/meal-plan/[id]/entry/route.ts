@@ -54,7 +54,7 @@ export async function PUT(
   if (entry) {
     updatedEntry = await prisma.mealPlanEntry.update({
       where: { id: entry.id },
-      data: { recipeId },
+      data: { recipeId, customLabel: null },
       include: {
         recipe: {
           select: {
