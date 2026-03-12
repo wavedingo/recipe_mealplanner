@@ -479,6 +479,71 @@ async function extractWithClaude(html: string, url: string): Promise<ParsedRecip
 }
 
 // ---------------------------------------------------------------------------
+// Plain-text extraction (Paste & Parse)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a recipe from plain text pasted by the user.
+ * Sends the text directly to Claude without any HTML stripping.
+ */
+export async function parseRecipeFromText(text: string): Promise<ParsedRecipe> {
+  const client = getAnthropicClient();
+  const truncated = text.slice(0, 20000);
+
+  const message = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    system: 'You are a recipe extraction assistant. Extract recipe information from text and return it as JSON.',
+    messages: [
+      {
+        role: 'user',
+        content: `Extract the recipe from this text and return it as JSON matching this TypeScript interface:\n\n${PARSED_RECIPE_INTERFACE}\n\nText:\n${truncated}\n\nReturn only valid JSON, no explanation.`,
+      },
+    ],
+  });
+
+  const textBlock = message.content.find((b) => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') {
+    throw new Error('Claude API returned no text content');
+  }
+
+  let jsonText = textBlock.text.trim();
+  const fenceMatch = jsonText.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/);
+  if (fenceMatch) jsonText = fenceMatch[1].trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error('Claude API returned invalid JSON');
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Claude API returned unexpected data structure');
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  if (!obj.title || typeof obj.title !== 'string') {
+    throw new Error('Could not find a recipe in the pasted text');
+  }
+
+  const coerceInt = (v: unknown): number | undefined => {
+    if (typeof v === 'number' && !isNaN(v)) return v;
+    if (typeof v === 'string') { const n = parseInt(v, 10); return isNaN(n) ? undefined : n; }
+    return undefined;
+  };
+  obj.servings = coerceInt(obj.servings) ?? undefined;
+  obj.prepTimeMins = coerceInt(obj.prepTimeMins) ?? undefined;
+  obj.cookTimeMins = coerceInt(obj.cookTimeMins) ?? undefined;
+  if (typeof obj.imageUrl !== 'string') obj.imageUrl = undefined;
+  if (typeof obj.description !== 'string') obj.description = undefined;
+  if (!Array.isArray(obj.ingredients)) obj.ingredients = [];
+  if (!Array.isArray(obj.steps)) obj.steps = [];
+
+  return obj as unknown as ParsedRecipe;
+}
+
+// ---------------------------------------------------------------------------
 // Main exported function
 // ---------------------------------------------------------------------------
 

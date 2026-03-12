@@ -33,7 +33,7 @@ interface RecipesClientProps {
 
 // ─── Add Recipe Modal ────────────────────────────────────────────────────────
 
-type ModalTab = 'url' | 'manual';
+type ModalTab = 'url' | 'paste' | 'manual';
 
 type ParsedPreview = ParsedRecipe;
 
@@ -285,12 +285,13 @@ interface AddRecipeModalProps {
 function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
   const [tab, setTab] = useState<ModalTab>('url');
   const [urlInput, setUrlInput] = useState('');
+  const [pasteInput, setPasteInput] = useState('');
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState('');
   const [form, setForm] = useState<RecipeFormData>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [showForm, setShowForm] = useState(false); // after parse in URL tab
+  const [showForm, setShowForm] = useState(false); // after parse in URL/paste tab
 
   const updateForm = (updates: Partial<RecipeFormData>) =>
     setForm((prev) => ({ ...prev, ...updates }));
@@ -308,10 +309,33 @@ function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
       if (!res.ok) {
         const errMsg = data.error ?? 'Failed to parse recipe';
         if (errMsg.includes('403') || errMsg.includes('Forbidden')) {
-          setParseError('This site blocks automated access. Switch to the Manual Entry tab to add this recipe yourself.');
+          setParseError('This site blocks automated access. Switch to the Paste & Parse tab to add this recipe yourself.');
         } else {
           setParseError(errMsg);
         }
+        return;
+      }
+      setForm(parsedToFormData(data as ParsedPreview));
+      setShowForm(true);
+    } catch {
+      setParseError('Network error, please try again');
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handlePasteAndParse = async () => {
+    setParseError('');
+    setParsing(true);
+    try {
+      const res = await fetch('/api/recipes/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: pasteInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setParseError(data.error ?? 'Failed to parse recipe');
         return;
       }
       setForm(parsedToFormData(data as ParsedPreview));
@@ -371,7 +395,7 @@ function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 px-6">
-          {(['url', 'manual'] as ModalTab[]).map((t) => (
+          {(['url', 'paste', 'manual'] as ModalTab[]).map((t) => (
             <button
               key={t}
               onClick={() => {
@@ -387,7 +411,7 @@ function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t === 'url' ? 'From URL' : 'Manual Entry'}
+              {t === 'url' ? 'From URL' : t === 'paste' ? 'Paste & Parse' : 'Manual Entry'}
             </button>
           ))}
         </div>
@@ -431,13 +455,45 @@ function AddRecipeModal({ onClose, onSaved }: AddRecipeModalProps) {
             </>
           )}
 
+          {tab === 'paste' && (
+            <>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Paste Recipe Text</label>
+                <p className="text-xs text-gray-500">Copy all the text from the recipe page (Cmd+A, Cmd+C) and paste it here.</p>
+                <textarea
+                  value={pasteInput}
+                  onChange={(e) => setPasteInput(e.target.value)}
+                  placeholder="Paste recipe text here…"
+                  rows={8}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                />
+                <button
+                  onClick={handlePasteAndParse}
+                  disabled={!pasteInput.trim() || parsing}
+                  className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {parsing ? 'Parsing…' : 'Parse Recipe'}
+                </button>
+                {parseError && (
+                  <p className="text-red-600 text-sm">{parseError}</p>
+                )}
+              </div>
+              {showForm && (
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-sm text-gray-500 mb-4">Review and edit the parsed recipe before saving:</p>
+                  <RecipeFormFields form={form} onChange={updateForm} />
+                </div>
+              )}
+            </>
+          )}
+
           {tab === 'manual' && (
             <RecipeFormFields form={form} onChange={updateForm} />
           )}
         </div>
 
         {/* Footer */}
-        {(tab === 'manual' || showForm) && (
+        {(tab === 'manual' || showForm) && !parsing && (
           <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             {saveError ? (
               <p className="text-red-600 text-sm">{saveError}</p>
