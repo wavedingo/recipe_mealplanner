@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { parseSimpleIngredients, parseSimpleSteps, parseOptionalInt } from '@/lib/recipe-utils';
+import { compressImage } from '@/lib/compress-image';
 import type { Ingredient, RecipeStep } from '@/types/index';
 
 const MEAL_TAG_OPTIONS = ['breakfast', 'lunch', 'dinner', 'dessert', 'sides'];
@@ -391,6 +392,22 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
   // Meal plan modal
   const [showMealPlanModal, setShowMealPlanModal] = useState(false);
 
+  // Image upload compression
+  const [imageCompressing, setImageCompressing] = useState(false);
+
+  async function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !editData) return;
+    setImageCompressing(true);
+    try {
+      const dataUrl = await compressImage(file);
+      setEditData((prev) => prev ? { ...prev, imageUrl: dataUrl } : prev);
+    } finally {
+      setImageCompressing(false);
+      e.target.value = '';
+    }
+  }
+
   // Fork mode (reuses edit form; creates new recipe on save instead of updating)
   const [forkMode, setForkMode] = useState(false);
 
@@ -548,16 +565,32 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
 
   const handleShare = async () => {
     if (!recipe) return;
-    const shareUrl = recipe.sourceUrl || window.location.href;
+    const lines: string[] = [recipe.title];
+    const meta: string[] = [];
+    if (recipe.servings) meta.push(`Serves ${recipe.servings}`);
+    if (recipe.prepTimeMins) meta.push(`Prep ${recipe.prepTimeMins} min`);
+    if (recipe.cookTimeMins) meta.push(`Cook ${recipe.cookTimeMins} min`);
+    if (meta.length) lines.push(meta.join(' · '));
+    if (recipe.description) lines.push('', recipe.description);
+    if (recipe.ingredients.length) {
+      lines.push('', 'INGREDIENTS');
+      recipe.ingredients.forEach((ing) => {
+        const qty = ing.amount != null ? `${ing.amount} ` : '';
+        const unit = ing.unit ? `${ing.unit} ` : '';
+        lines.push(`- ${qty}${unit}${ing.name}${ing.notes ? `, ${ing.notes}` : ''}`);
+      });
+    }
+    if (recipe.steps.length) {
+      lines.push('', 'INSTRUCTIONS');
+      recipe.steps.forEach((step, i) => lines.push(`${i + 1}. ${step.text}`));
+    }
+    if (recipe.notes) lines.push('', 'NOTES', recipe.notes);
+    if (recipe.sourceUrl) lines.push('', `Source: ${recipe.sourceUrl}`);
     try {
-      if (navigator.share) {
-        await navigator.share({ title: recipe.title, url: shareUrl });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        showToast('Link copied to clipboard!');
-      }
+      await navigator.clipboard.writeText(lines.join('\n'));
+      showToast('Recipe copied to clipboard!');
     } catch {
-      // user cancelled share or clipboard failed
+      showToast('Could not access clipboard');
     }
   };
 
@@ -651,8 +684,20 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
                 <input type="url" value={editData.sourceUrl} onChange={update('sourceUrl')} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-slate-600" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Image URL</label>
-                <input type="url" value={editData.imageUrl} onChange={update('imageUrl')} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-slate-600" />
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Image</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={editData.imageUrl.startsWith('data:') ? '' : editData.imageUrl}
+                    onChange={update('imageUrl')}
+                    placeholder="https://... or upload a file"
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-slate-600"
+                  />
+                  <label className={`flex items-center px-3 py-2 rounded-xl border text-sm font-medium cursor-pointer transition-colors ${imageCompressing ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-300 hover:border-amber-500/60 hover:text-amber-300'}`}>
+                    {imageCompressing ? 'Compressing…' : 'Upload'}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageFile} disabled={imageCompressing} />
+                  </label>
+                </div>
                 {editData.imageUrl && (
                   <div className="mt-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

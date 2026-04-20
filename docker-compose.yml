@@ -12,7 +12,7 @@ services:
   db:
     image: postgres:16-alpine
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - recipe_mealplan_postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: mealplanner
       POSTGRES_PASSWORD: mealplanner
@@ -25,4 +25,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  recipe_mealplan_postgres_data:
+    external: true

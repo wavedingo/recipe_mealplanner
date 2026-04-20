@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import RecipeCard from '@/components/RecipeCard';
 import type { ParsedRecipe, Ingredient, RecipeStep } from '@/types/index';
 import { parseSimpleIngredients, parseSimpleSteps, parseOptionalInt } from '@/lib/recipe-utils';
+import { compressImage } from '@/lib/compress-image';
 
 interface RecipeTag {
   tag: { id: string; name: string };
@@ -178,6 +179,21 @@ function TagSelector({
 }
 
 function RecipeFormFields({ form, onChange }: RecipeFormProps) {
+  const [compressing, setCompressing] = useState(false);
+
+  async function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCompressing(true);
+    try {
+      const dataUrl = await compressImage(file);
+      onChange({ imageUrl: dataUrl });
+    } finally {
+      setCompressing(false);
+      e.target.value = '';
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -211,14 +227,20 @@ function RecipeFormFields({ form, onChange }: RecipeFormProps) {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-1">Image URL</label>
-        <input
-          type="url"
-          value={form.imageUrl}
-          onChange={(e) => onChange({ imageUrl: e.target.value })}
-          placeholder="https://..."
-          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-600/50"
-        />
+        <label className="block text-sm font-medium text-slate-300 mb-1">Image</label>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={form.imageUrl.startsWith('data:') ? '' : form.imageUrl}
+            onChange={(e) => onChange({ imageUrl: e.target.value })}
+            placeholder="https://... or upload a file"
+            className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-600/50"
+          />
+          <label className={`flex items-center px-3 py-2 rounded-lg border text-sm font-medium cursor-pointer transition-colors ${compressing ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-300 hover:border-amber-500/60 hover:text-amber-300'}`}>
+            {compressing ? 'Compressing…' : 'Upload'}
+            <input type="file" accept="image/*" className="hidden" onChange={handleImageFile} disabled={compressing} />
+          </label>
+        </div>
         {form.imageUrl && (
           <div className="mt-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
