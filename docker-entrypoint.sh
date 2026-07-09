@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Pushing database schema..."
-npx prisma db push --accept-data-loss
+echo "Applying database migrations..."
+npx prisma migrate deploy
 
 echo "Starting Next.js app..."
 exec node server.js

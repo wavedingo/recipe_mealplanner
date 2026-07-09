@@ -1,3 +1,8 @@
+# Pin the project name: the directory has been renamed before (recipe_mealplan,
+# recipe_mealplanner, social_recipe_mealplanner) and each rename made a plain
+# `docker compose up` create a NEW stack against the SAME external data volume.
+name: recipe_mealplanner
+
 services:
   app:
     build: .
