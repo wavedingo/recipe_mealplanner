@@ -22,6 +22,8 @@ model Recipe {
   steps        Json     // [{order: number, text: string}]
   rating       Int?     // 1–5
   notes        String?
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tags         RecipeTag[]
   mealPlanEntries MealPlanEntry[]
   forkedFromId String?
@@ -29,6 +31,8 @@ model Recipe {
   forks        Recipe[] @relation("RecipeForks")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([userId, createdAt])
 }
 
 model Tag {
@@ -47,10 +51,14 @@ model RecipeTag {
 
 model MealPlan {
   id            String         @id @default(cuid())
-  weekStartDate DateTime       @unique // Monday of the week
+  weekStartDate DateTime       // Monday of the week
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   entries       MealPlanEntry[]
   groceryList   GroceryList?
   createdAt     DateTime       @default(now())
+
+  @@unique([userId, weekStartDate])
 }
 
 model MealPlanEntry {
@@ -82,4 +90,55 @@ model GroceryItem {
   category      String      @default("other")
   checked       Boolean     @default(false)
   isManual      Boolean     @default(false)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  name          String?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  recipes       Recipe[]
+  mealPlans     MealPlan[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
 }
