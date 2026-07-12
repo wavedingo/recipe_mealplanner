@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import type { Ingredient } from '@/types/index';
+import { getSessionUserId } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search') ?? undefined;
   const tag = searchParams.get('tag') ?? undefined;
 
   let recipes = await prisma.recipe.findMany({
+    where: { userId },
     include: { tags: { include: { tag: true } } },
     orderBy: { createdAt: 'desc' },
   });
@@ -34,6 +41,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -71,6 +83,7 @@ export async function POST(req: NextRequest) {
 
   const recipe = await prisma.recipe.create({
     data: {
+      userId,
       title: data.title.trim(),
       description: typeof data.description === 'string' ? data.description : undefined,
       sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : undefined,
