@@ -81,6 +81,18 @@ export async function POST(req: NextRequest) {
     )
   );
 
+  // Phase 1: forking is same-user only (cross-user forks arrive with Phase 2 visibility rules)
+  const forkedFromId = typeof data.forkedFromId === 'string' ? data.forkedFromId : undefined;
+  if (forkedFromId) {
+    const source = await prisma.recipe.findFirst({
+      where: { id: forkedFromId, userId },
+      select: { id: true },
+    });
+    if (!source) {
+      return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+    }
+  }
+
   const recipe = await prisma.recipe.create({
     data: {
       userId,
@@ -95,7 +107,7 @@ export async function POST(req: NextRequest) {
       steps: Array.isArray(data.steps) ? data.steps : [],
       rating: typeof data.rating === 'number' ? data.rating : undefined,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
-      forkedFromId: typeof data.forkedFromId === 'string' ? data.forkedFromId : undefined,
+      forkedFromId,
       tags: {
         create: tagRecords.map((tag) => ({ tagId: tag.id })),
       },
