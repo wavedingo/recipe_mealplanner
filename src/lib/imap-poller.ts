@@ -18,6 +18,19 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
     return { processed: 0, errors: [] };
   }
 
+  const importEmail = (process.env.IMPORT_USER_EMAIL ?? process.env.HOUSEHOLD_EMAIL ?? '')
+    .trim()
+    .toLowerCase();
+  const importUser = importEmail
+    ? await prisma.user.findUnique({ where: { email: importEmail } })
+    : null;
+  if (!importUser) {
+    return {
+      processed: 0,
+      errors: ['Email import: IMPORT_USER_EMAIL / HOUSEHOLD_EMAIL is not set or does not match a user'],
+    };
+  }
+
   const client = new ImapFlow({
     host: process.env.IMAP_HOST || 'imap.bluehost.com',
     port: parseInt(process.env.IMAP_PORT || '993', 10),
@@ -59,6 +72,7 @@ export async function pollEmailForRecipes(): Promise<PollResult> {
 
             await prisma.recipe.create({
               data: {
+                userId: importUser.id,
                 title: parsed.title,
                 description: parsed.description,
                 sourceUrl: url,
