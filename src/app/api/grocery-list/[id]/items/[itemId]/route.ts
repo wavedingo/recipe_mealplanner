@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getSessionUserId } from '@/lib/session';
 
 type RouteParams = { params: Promise<{ id: string; itemId: string }> };
 
@@ -7,11 +8,16 @@ export async function DELETE(
   _req: NextRequest,
   { params }: RouteParams
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id, itemId } = await params;
 
   // Verify item belongs to the list
   const item = await prisma.groceryItem.findFirst({
-    where: { id: itemId, groceryListId: id },
+    where: { id: itemId, groceryList: { id, mealPlan: { userId } } },
   });
 
   if (!item) {
@@ -27,11 +33,16 @@ export async function PATCH(
   req: NextRequest,
   { params }: RouteParams
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id, itemId } = await params;
 
   // Verify item belongs to the list
   const item = await prisma.groceryItem.findFirst({
-    where: { id: itemId, groceryListId: id },
+    where: { id: itemId, groceryList: { id, mealPlan: { userId } } },
   });
 
   if (!item) {

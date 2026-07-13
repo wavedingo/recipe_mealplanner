@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { aggregateIngredients, RecipeWithIngredients } from '@/lib/ingredient-aggregator';
 import type { Ingredient } from '@/types/index';
+import { getSessionUserId } from '@/lib/session';
 
 export async function POST(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -23,8 +29,8 @@ export async function POST(req: NextRequest) {
   const { mealPlanId } = data;
 
   // Verify meal plan exists and fetch all entries with recipes
-  const mealPlan = await prisma.mealPlan.findUnique({
-    where: { id: mealPlanId },
+  const mealPlan = await prisma.mealPlan.findFirst({
+    where: { id: mealPlanId, userId },
     include: {
       entries: {
         include: {
