@@ -1,8 +1,11 @@
 #!/bin/sh
 set -e
 
-echo "Pushing database schema..."
-npx prisma db push --accept-data-loss
+echo "Applying database migrations..."
+npx prisma migrate deploy
+
+echo "Seeding household user (idempotent)..."
+node scripts/seed-household.mjs
 
 echo "Starting Next.js app..."
 exec node server.js

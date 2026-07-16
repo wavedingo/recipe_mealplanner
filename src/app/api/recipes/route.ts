@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import type { Ingredient } from '@/types/index';
+import { getSessionUserId } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search') ?? undefined;
   const tag = searchParams.get('tag') ?? undefined;
 
   let recipes = await prisma.recipe.findMany({
+    where: { userId },
     include: { tags: { include: { tag: true } } },
     orderBy: { createdAt: 'desc' },
   });
@@ -34,6 +41,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -69,8 +81,21 @@ export async function POST(req: NextRequest) {
     )
   );
 
+  // Phase 1: forking is same-user only (cross-user forks arrive with Phase 2 visibility rules)
+  const forkedFromId = typeof data.forkedFromId === 'string' && data.forkedFromId ? data.forkedFromId : undefined;
+  if (forkedFromId) {
+    const source = await prisma.recipe.findFirst({
+      where: { id: forkedFromId, userId },
+      select: { id: true },
+    });
+    if (!source) {
+      return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+    }
+  }
+
   const recipe = await prisma.recipe.create({
     data: {
+      userId,
       title: data.title.trim(),
       description: typeof data.description === 'string' ? data.description : undefined,
       sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : undefined,
@@ -82,7 +107,7 @@ export async function POST(req: NextRequest) {
       steps: Array.isArray(data.steps) ? data.steps : [],
       rating: typeof data.rating === 'number' ? data.rating : undefined,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
-      forkedFromId: typeof data.forkedFromId === 'string' ? data.forkedFromId : undefined,
+      forkedFromId,
       tags: {
         create: tagRecords.map((tag) => ({ tagId: tag.id })),
       },

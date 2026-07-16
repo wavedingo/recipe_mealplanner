@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getSessionUserId } from '@/lib/session';
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
 
   let body: unknown;
@@ -31,16 +37,16 @@ export async function PUT(
     return NextResponse.json({ error: 'recipeId must be a string or null' }, { status: 400 });
   }
 
-  // Validate recipe exists when recipeId is provided
+  // Validate recipe exists (and belongs to the caller) when recipeId is provided
   if (recipeId !== null) {
-    const recipe = await prisma.recipe.findUnique({ where: { id: recipeId } });
+    const recipe = await prisma.recipe.findFirst({ where: { id: recipeId, userId } });
     if (!recipe) {
       return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
     }
   }
 
-  // Check meal plan exists
-  const mealPlan = await prisma.mealPlan.findUnique({ where: { id } });
+  // Check meal plan exists and belongs to the caller
+  const mealPlan = await prisma.mealPlan.findFirst({ where: { id, userId } });
   if (!mealPlan) {
     return NextResponse.json({ error: 'Meal plan not found' }, { status: 404 });
   }

@@ -41,6 +41,7 @@ COPY --from=builder /app/public ./public
 # Copy Prisma schema and config for migrations
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /app/scripts ./scripts
 
 # Copy full node_modules — Prisma 7 CLI has a deep dependency tree
 # that cannot be selectively copied without missing transitive deps

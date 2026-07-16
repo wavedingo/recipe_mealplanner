@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { getSessionUserId } from '@/lib/session';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
 
-  const recipe = await prisma.recipe.findUnique({
-    where: { id },
+  const recipe = await prisma.recipe.findFirst({
+    where: { id, userId },
     include: {
       tags: { include: { tag: true } },
       forkedFrom: { select: { id: true, title: true } },
@@ -27,6 +33,11 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
 
   let body: unknown;
@@ -67,6 +78,14 @@ export async function PUT(
   // Handle tag replacement in a transaction
   try {
     const recipe = await prisma.$transaction(async (tx) => {
+      const existing = await tx.recipe.findFirst({ where: { id, userId }, select: { id: true } });
+      if (!existing) {
+        throw new Prisma.PrismaClientKnownRequestError('Not found', {
+          code: 'P2025',
+          clientVersion: 'ownership-check',
+        });
+      }
+
       if (tags !== undefined) {
         // Delete existing tags and replace with the new set
         await tx.recipeTag.deleteMany({ where: { recipeId: id } });
@@ -108,16 +127,17 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
 
-  try {
-    // RecipeTags and MealPlanEntries cascade delete via schema onDelete: Cascade / SetNull
-    await prisma.recipe.delete({ where: { id } });
-    return new NextResponse(null, { status: 204 });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-      return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
-    }
-    throw err;
+  // RecipeTags and MealPlanEntries cascade delete via schema onDelete: Cascade / SetNull
+  const deleted = await prisma.recipe.deleteMany({ where: { id, userId } });
+  if (deleted.count === 0) {
+    return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
   }
+  return new NextResponse(null, { status: 204 });
 }

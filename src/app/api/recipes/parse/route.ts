@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseRecipeFromUrl, parseRecipeFromText } from '@/lib/recipe-parser';
+import { getSessionUserId } from '@/lib/session';
 
 export async function POST(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();

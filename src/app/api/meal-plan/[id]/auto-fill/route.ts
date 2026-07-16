@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db';
+import { getSessionUserId } from '@/lib/session';
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -27,6 +28,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
 
   let body: unknown;
@@ -40,8 +46,8 @@ export async function POST(
   const prompt = typeof data.prompt === 'string' ? data.prompt.trim() : '';
 
   // Load meal plan with entries
-  const mealPlanRaw = await prisma.mealPlan.findUnique({
-    where: { id },
+  const mealPlanRaw = await prisma.mealPlan.findFirst({
+    where: { id, userId },
     include: {
       entries: {
         include: {
@@ -68,6 +74,7 @@ export async function POST(
 
   // Fetch library recipes (id, title, tags only)
   const recipesRaw = await prisma.recipe.findMany({
+    where: { userId },
     select: {
       id: true,
       title: true,
@@ -182,8 +189,8 @@ ${libraryList}`,
   );
 
   // Re-fetch and return the updated meal plan
-  const updated = await prisma.mealPlan.findUnique({
-    where: { id },
+  const updated = await prisma.mealPlan.findFirst({
+    where: { id, userId },
     include: {
       entries: {
         include: {

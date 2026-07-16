@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getSessionUserId } from '@/lib/session';
 
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);
@@ -11,6 +12,11 @@ function getMondayOfWeek(date: Date): Date {
 }
 
 export async function GET(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const weekStartParam = searchParams.get('weekStart');
 
@@ -30,8 +36,9 @@ export async function GET(req: NextRequest) {
 
   // Atomically get or create the meal plan for this week
   const mealPlan = await prisma.mealPlan.upsert({
-    where: { weekStartDate: weekStart },
+    where: { userId_weekStartDate: { userId, weekStartDate: weekStart } },
     create: {
+      userId,
       weekStartDate: weekStart,
       entries: {
         create: Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i })),
