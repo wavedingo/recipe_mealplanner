@@ -5,6 +5,10 @@ import type { NextAuthConfig } from 'next-auth';
 // provider, which pulls in prisma/bcrypt and must stay out of the middleware bundle.
 export const authConfig = {
   secret: process.env.AUTH_SECRET,
+  // This app is self-hosted behind arbitrary hostnames/ports by design, so
+  // NextAuth must trust the incoming Host header rather than rejecting
+  // non-localhost requests during credentials login.
+  trustHost: true,
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
