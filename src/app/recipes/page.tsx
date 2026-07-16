@@ -1,10 +1,16 @@
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
+import { getSessionUserId } from '@/lib/session';
 import RecipesClient from './RecipesClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RecipesPage() {
+  const userId = await getSessionUserId();
+  if (!userId) redirect('/login');
+
   const recipes = await prisma.recipe.findMany({
+    where: { userId },
     include: { tags: { include: { tag: true } } },
     orderBy: { createdAt: 'desc' },
   });
