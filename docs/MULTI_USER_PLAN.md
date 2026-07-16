@@ -49,7 +49,55 @@ The `name:` pin prevents recurrence.
 - Leftover volume `recipe_mealplanner_postgres_data` (middle-era, unused) still
   exists; check contents before deleting.
 
-## Phase 1 — User model + auth migration
+## Phase 1 — User model + auth migration ✅ IMPLEMENTED (2026-07-16) — NOT YET DEPLOYED
+
+**Status:** complete on branch `multi-user-phase-0`, final code review passed
+("Ready to merge"), **PR #2 open**: https://github.com/wavedingo/recipe_mealplanner/pull/2.
+The live app still runs Phase 0 — nothing changes at home until the deploy below.
+Spec: `docs/superpowers/specs/2026-07-09-phase-1-multi-user-auth-design.md` ·
+Plan: `docs/superpowers/plans/2026-07-09-phase-1-multi-user-auth.md`
+
+Verified so far: 61 jest tests + type-check green; migration gate script proved a
+lossless upgrade against a restore of the production dump (all recipes/meal plans
+backfilled to the household account); end-to-end smoke on a throwaway stack passed
+(register 201, duplicate email 409, unauthenticated 401/307, two-user isolation
+verified at BOTH the API layer and the rendered `/recipes` page).
+
+### Owner test & deploy checklist (do in order)
+
+1. **Merge**: confirm PR #2 CI is green, then merge it into `main`.
+2. **Configure**: add one line to `.env`:
+   `HOUSEHOLD_EMAIL=james.varga@icloud.com`
+   (keep `HOUSEHOLD_PASSWORD_HASH` exactly as it is — see "About the password" below).
+3. **Backup**:
+   `docker exec recipe_mealplanner-db-1 pg_dump -U mealplanner -d mealplanner --format=custom > backups/pre-phase-1-$(date +%F).dump`
+4. **Deploy**: `git checkout main && git pull && docker compose build app && docker compose up -d`
+   (the migration + seed run automatically on boot; watch with `docker logs -f recipe_mealplanner-app-1` —
+   expect "Applying database migrations", "seed-household: configured household user as james.varga@icloud.com", then Next.js start).
+5. **Expect a one-time logout**: everyone's existing session is invalidated by
+   design; the login page now asks for **email + password**.
+6. **Log in** (do NOT use the register page for the household email):
+   email `james.varga@icloud.com`, password = **the same household password as
+   always**. All recipes, meal plans, and grocery lists should be there.
+7. **Test isolation** (optional but recommended): use the "Create one" link to
+   register a throwaway second account (any other email) — its library should be
+   empty, and it must not see household recipes (try a household recipe URL → 404).
+8. **Test the flows you use daily**: assign a recipe to the week, regenerate the
+   grocery list, check off items, import a recipe by URL.
+9. **Rollback if anything is wrong**: `git checkout 7b02610 && docker compose build app && docker compose up -d`,
+   then restore the step-3 dump if the DB needs reverting:
+   `docker exec -i recipe_mealplanner-db-1 pg_restore -U mealplanner -d mealplanner --clean < backups/pre-phase-1-<date>.dump`
+
+**About the password:** there is no new password and no first-login setup step.
+The deploy's seed script copies your *existing* household password hash onto the
+new user account — so at the new login screen you type your email plus the exact
+password the family uses today. Nothing to create or reset. (A password-change /
+reset feature is deliberately deferred to the public-deployment phase; until
+then the household password stays what it is.) The register page will refuse
+`james.varga@icloud.com` with "log in instead" — that's intentional protection,
+not an error.
+
+### Original Phase 1 goals (for reference)
 
 Goal: individual accounts, all data scoped per user, zero data loss for existing
 household data. **Use Opus 4.8 for the schema/auth design and migration; Sonnet 5
