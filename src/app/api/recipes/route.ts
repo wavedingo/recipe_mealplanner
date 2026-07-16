@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   );
 
   // Phase 1: forking is same-user only (cross-user forks arrive with Phase 2 visibility rules)
-  const forkedFromId = typeof data.forkedFromId === 'string' ? data.forkedFromId : undefined;
+  const forkedFromId = typeof data.forkedFromId === 'string' && data.forkedFromId ? data.forkedFromId : undefined;
   if (forkedFromId) {
     const source = await prisma.recipe.findFirst({
       where: { id: forkedFromId, userId },

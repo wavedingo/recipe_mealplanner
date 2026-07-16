@@ -14,22 +14,27 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     const form = new FormData(e.currentTarget);
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: form.get('email'),
-        name: form.get('name'),
-        password: form.get('password'),
-      }),
-    });
-    if (res.ok) {
-      router.push('/login?registered=1');
-      return;
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.get('email'),
+          name: form.get('name'),
+          password: form.get('password'),
+        }),
+      });
+      if (res.ok) {
+        router.push('/login?registered=1');
+        return;
+      }
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error ?? 'Something went wrong. Please try again.');
+      setSubmitting(false);
+    } catch {
+      setError('Network error. Please try again.');
+      setSubmitting(false);
     }
-    const data = (await res.json().catch(() => null)) as { error?: string } | null;
-    setError(data?.error ?? 'Something went wrong. Please try again.');
-    setSubmitting(false);
   }
 
   const inputClass =
